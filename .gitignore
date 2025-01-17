@@ -8,8 +8,9 @@ largefile.*
 *.tar.gz
 
 # Ignorer les dossiers sp�cifiques
-/piper/
-/model/
+piper/
+model/
+myenv/
 
 # Ignorer des fichiers sensibles
 .env
