@@ -11,6 +11,7 @@ largefile.*
 piper/
 model/
 myenv/
+Base/
 
 # Ignorer des fichiers sensibles
 .env
