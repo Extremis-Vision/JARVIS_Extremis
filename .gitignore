@@ -1,0 +1,16 @@
+# Ignorer les fichiers temporaires
+*.tmp
+*.log
+
+# Ignorer les fichiers volumineux
+largefile.*
+*.zip
+*.tar.gz
+
+# Ignorer les dossiers sp�cifiques
+/piper/
+/model/
+
+# Ignorer des fichiers sensibles
+.env
+credentials.json
