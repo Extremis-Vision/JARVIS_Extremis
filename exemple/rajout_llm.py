@@ -13,7 +13,7 @@ q = queue.Queue()
 client = OpenAI(base_url="http://localhost:1234/v1", api_key="lm-studio")
 
 history = [
-    {"role": "system", "content": "As Jarvis an AI voice assistant, you will be provided with various data in JSON format. Your job is to interpret the data and respond with a short, precise sentence suitable for voice output. The response should be natural and easy to understand.Always respond with short sentences in french."}
+    {"role": "system", "content": "En tant que Jarvis, un assistant vocal intelligent, tu dois répondre en français avec des phrases courtes et précises adaptées à une sortie vocale. Tes réponses doivent être naturelles et faciles à comprendre."}
 ]
 
 
