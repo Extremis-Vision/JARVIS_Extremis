@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reconnaissance vocale</title>
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+    <script>
+        var socket = io.connect('http://' + document.domain + ':' + location.port);
+
+        // �couter les �v�nements de transcription
+        socket.on('transcription', function(data) {
+            document.getElementById("transcription").innerText = data.text;
+            // Mettre � jour l'historique
+            var historyDiv = document.getElementById("history");
+            historyDiv.innerHTML = "";
+            data.history.forEach(function(message) {
+                var p = document.createElement("p");
+                p.innerText = message;
+                historyDiv.appendChild(p);
+            });
+        });
+
+        function startTranscription() {
+            fetch('/start_transcription').then(response => response.json());
+        }
+    </script>
+</head>
+<body>
+    <h1>Reconnaissance vocale en temps réel</h1>
+    <button onclick="startTranscription()">Démarrer la transcription</button>
+
+    <div>
+        <h2>Historique des conversations :</h2>
+        <div id="history"></div>
+    </div>
+
+    <div>
+        <h2>Transcription en cours :</h2>
+        <pre id="transcription"></pre>
+    </div>
+</body>
+</html>
