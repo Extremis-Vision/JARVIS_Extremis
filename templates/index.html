@@ -11,6 +11,17 @@
             padding: 10px;
             margin-top: 20px;
             min-height: 100px;
+            background-color: #f9f9f9;
+        }
+        #partialTranscription {
+            color: gray;
+            font-style: italic;
+            margin-top: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 16px;
         }
     </style>
 </head>
@@ -18,38 +29,53 @@
     <h1>Reconnaissance Vocale en Temps R�el</h1>
     <button id="startButton">D�marrer l'enregistrement</button>
     <button id="stopButton" disabled>Arr�ter l'enregistrement</button>
-    <div id="transcription"></div>
+
+    <div id="transcription">
+        <strong>Transcription finale :</strong>
+        <p id="finalText"></p>
+    </div>
+
+    <div id="partialTranscription">
+        <strong>Transcription partielle :</strong>
+        <p id="partialText"></p>
+    </div>
 
     <script>
         const socket = io();
         let audioContext;
         let processor;
         let input;
-        
+
         const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
-        const transcriptionDiv = document.getElementById('transcription');
+        const finalText = document.getElementById('finalText');
+        const partialText = document.getElementById('partialText');
 
         async function startRecording() {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            audioContext = new AudioContext({sampleRate: 16000});
-            input = audioContext.createMediaStreamSource(stream);
-            processor = audioContext.createScriptProcessor(1024, 1, 1);
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContext = new AudioContext({ sampleRate: 16000 });
+                input = audioContext.createMediaStreamSource(stream);
+                processor = audioContext.createScriptProcessor(1024, 1, 1);
 
-            input.connect(processor);
-            processor.connect(audioContext.destination);
+                input.connect(processor);
+                processor.connect(audioContext.destination);
 
-            processor.onaudioprocess = (e) => {
-                const float32Array = e.inputBuffer.getChannelData(0);
-                const int16Array = new Int16Array(float32Array.length);
-                for (let i = 0; i < float32Array.length; i++) {
-                    int16Array[i] = Math.max(-32768, Math.min(32767, Math.floor(float32Array[i] * 32768)));
-                }
-                socket.emit('audio_stream', int16Array.buffer);
-            };
+                processor.onaudioprocess = (e) => {
+                    const float32Array = e.inputBuffer.getChannelData(0);
+                    const int16Array = new Int16Array(float32Array.length);
+                    for (let i = 0; i < float32Array.length; i++) {
+                        int16Array[i] = Math.max(-32768, Math.min(32767, Math.floor(float32Array[i] * 32768)));
+                    }
+                    socket.emit('audio_stream', int16Array.buffer);
+                };
 
-            startButton.disabled = true;
-            stopButton.disabled = false;
+                startButton.disabled = true;
+                stopButton.disabled = false;
+            } catch (err) {
+                console.error("Erreur lors de l'acc�s au microphone :", err);
+                alert("Impossible d'acc�der au microphone. V�rifiez vos permissions.");
+            }
         }
 
         function stopRecording() {
@@ -66,15 +92,23 @@
         stopButton.onclick = stopRecording;
 
         socket.on('transcription', (data) => {
-            transcriptionDiv.textContent += ' ' + data.text;
+            if (data.final) {
+                // Ajouter le texte final � la transcription principale
+                finalText.textContent += ' ' + data.text;
+                // Effacer la transcription partielle
+                partialText.textContent = '';
+            } else {
+                // Afficher la transcription partielle
+                partialText.textContent = data.text;
+            }
         });
 
         socket.on('connect', () => {
-            console.log('Connected to server');
+            console.log('Connect� au serveur');
         });
 
         socket.on('disconnect', () => {
-            console.log('Disconnected from server');
+            console.log('D�connect� du serveur');
             stopRecording();
         });
     </script>

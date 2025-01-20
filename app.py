@@ -6,7 +6,7 @@ import json
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# Assurez-vous que ce chemin pointe vers votre mod�le Vosk
+# Charger le mod�le Vosk (assurez-vous que le chemin est correct)
 model = Model("./model")
 
 # Utiliser un dictionnaire pour stocker les reconnaisseurs par session
@@ -38,19 +38,25 @@ def handle_audio_stream(data):
         return
     
     try:
-        print(f"Received audio data of length: {len(data)}")
+        # V�rifiez que les donn�es audio ne sont pas vides
         if len(data) == 0:
             print("Warning: Received empty audio data")
             return
 
+        # Assurez-vous que les donn�es sont au format correct
+        if not isinstance(data, bytes):
+            print("Warning: Audio data is not in bytes format")
+            return
+
+        # Traitez les donn�es audio avec Vosk
         if recognizer.AcceptWaveform(data):
             result = json.loads(recognizer.Result())
             print(f"Final result: {result}")
-            emit('transcription', {'text': result.get('text', '')})
+            emit('transcription', {'text': result.get('text', ''), 'final': True})
         else:
             partial_result = json.loads(recognizer.PartialResult())
             print(f"Partial result: {partial_result}")
-            emit('transcription', {'text': partial_result.get('partial', '')})
+            emit('transcription', {'text': partial_result.get('partial', ''), 'final': False})
     except Exception as e:
         print(f"Error processing audio stream: {e}")
 
