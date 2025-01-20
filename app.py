@@ -2,65 +2,49 @@ from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 from vosk import Model, KaldiRecognizer
 import json
-import unicodedata
-import re
 import logging
+import traceback
+import numpy as np
 
 # Configuration des logs
-logging.basicConfig(level=logging.INFO, 
-                    format='%(asctime)s - %(levelname)s: %(message)s')
+logging.basicConfig(
+    level=logging.INFO, 
+    format='%(asctime)s - %(levelname)s: %(message)s'
+)
 
 app = Flask(__name__)
-socketio = SocketIO(app, 
-                    cors_allowed_origins="*", 
-                    logger=True, 
-                    engineio_logger=True)
+socketio = SocketIO(
+    app, 
+    cors_allowed_origins="*", 
+    async_mode='threading',
+    logger=True, 
+    engineio_logger=True
+)
 
-# Charger le mod�le Vosk 
-try:
-    model = Model("./model")
-except Exception as e:
-    logging.error(f"Erreur de chargement du mod�le Vosk : {e}")
-    model = None
-
-# Utiliser un dictionnaire pour stocker les reconnaisseurs par session
+# Variables globales
+model = None
 recognizers = {}
 
-def safe_decode(text):
-    """
-    D�code le texte de mani�re s�curis�e en g�rant diff�rents encodages
-    """
-    encodings = ['utf-8', 'latin1', 'iso-8859-1']
-    
-    for encoding in encodings:
-        try:
-            return text.encode('latin1').decode(encoding)
-        except UnicodeDecodeError:
-            continue
-    
-    return text
+def initialize_vosk_model(model_path):
+    """Initialisation s�curis�e du mod�le Vosk"""
+    global model
+    try:
+        model = Model(model_path)
+        logging.info("Mod�le Vosk charg� avec succ�s")
+    except Exception as e:
+        logging.error(f"Erreur de chargement du mod�le Vosk : {e}")
+        model = None
 
 def clean_text(text):
-    """
-    Nettoie et normalise le texte
-    """
+    """Nettoyage et normalisation du texte"""
     try:
-        # D�code le texte de mani�re s�curis�e
-        text = safe_decode(text)
-        
-        # Normalise les caract�res accentu�s
-        text = unicodedata.normalize('NFKD', text)
-        
-        # Supprime les caract�res non imprimables et non alphab�tiques
-        text = re.sub(r'[^a-zA-Z�-�\s\']', '', text)
-        
-        # Convertit en minuscules
-        text = text.lower().strip()
-        
-        return text
+        # Suppression des caract�res sp�ciaux et normalisation
+        text = text.strip()
+        text = ''.join(char for char in text if char.isprintable())
+        return text.lower()
     except Exception as e:
         logging.error(f"Erreur de nettoyage du texte : {e}")
-        return text
+        return ""
 
 @app.route('/')
 def index():
@@ -69,15 +53,17 @@ def index():
 @socketio.on('connect')
 def handle_connect():
     if model is None:
-        logging.error("Mod�le Vosk non charg�")
+        logging.warning("Mod�le Vosk non initialis�")
         return False
     
     session_id = request.sid
     try:
-        recognizers[session_id] = KaldiRecognizer(model, 16000)
+        # Cr�ation d'un nouveau recognizer par session
+        recognizer = KaldiRecognizer(model, 16000)
+        recognizers[session_id] = recognizer
         logging.info(f"Nouvelle connexion : {session_id}")
     except Exception as e:
-        logging.error(f"Erreur de cr�ation du reconnaisseur : {e}")
+        logging.error(f"Erreur de cr�ation du recognizer : {e}")
         return False
 
 @socketio.on('disconnect')
@@ -93,12 +79,16 @@ def handle_audio_stream(data):
     recognizer = recognizers.get(session_id)
     
     if recognizer is None:
-        logging.warning("Pas de reconnaisseur pour cette session")
+        logging.warning("Pas de recognizer pour cette session")
         return
 
     try:
-        # V�rifications des donn�es audio
-        if not data or len(data) < 1024:
+        # Conversion s�curis�e des donn�es
+        if isinstance(data, dict) and '_placeholder' in data:
+            return
+        
+        # V�rification de la taille des donn�es
+        if len(data) < 1024:
             logging.warning("Donn�es audio insuffisantes")
             return
 
@@ -109,7 +99,7 @@ def handle_audio_stream(data):
             
             if text:
                 logging.info(f"R�sultat final : {text}")
-                emit('transcription', {
+                socketio.emit('transcription', {
                     'text': text, 
                     'final': True
                 })
@@ -119,19 +109,19 @@ def handle_audio_stream(data):
             
             if text:
                 logging.info(f"R�sultat partiel : {text}")
-                emit('transcription', {
+                socketio.emit('transcription', {
                     'text': text, 
                     'final': False
                 })
     
     except Exception as e:
         logging.error(f"Erreur de traitement audio : {e}")
-
-@socketio.on_error_default
-def default_error_handler(e):
-    logging.error(f"Une erreur est survenue : {e}")
+        logging.error(traceback.format_exc())
 
 if __name__ == '__main__':
+    # Initialisation du mod�le Vosk
+    initialize_vosk_model("./model")
+    
     if model:
         socketio.run(app, host='0.0.0.0', port=5000, debug=True)
     else:

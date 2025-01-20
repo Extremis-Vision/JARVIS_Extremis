@@ -4,13 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reconnaissance Vocale en Temps R�el</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.min.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
+        body { 
+            font-family: Arial, sans-serif; 
+            max-width: 800px; 
+            margin: 0 auto; 
+            padding: 20px; 
         }
         #transcription, #partialTranscription {
             border: 1px solid #ccc;
@@ -19,115 +19,84 @@
             min-height: 100px;
             background-color: #f9f9f9;
         }
-        #partialTranscription {
-            color: gray;
-            font-style: italic;
-        }
-        button {
-            padding: 10px 20px;
-            margin: 10px;
-            font-size: 16px;
-            cursor: pointer;
-        }
-        #status {
-            color: green;
-            margin-top: 10px;
+        button { 
+            padding: 10px 20px; 
+            margin: 10px; 
+            cursor: pointer; 
         }
     </style>
 </head>
 <body>
-    <h1>Reconnaissance Vocale en Temps R�el</h1>
-    <button id="startButton">??? D�marrer l'enregistrement</button>
-    <button id="stopButton" disabled>?? Arr�ter l'enregistrement</button>
-    <div id="status"></div>
-
+    <h1>Reconnaissance Vocale</h1>
+    <button id="startBtn">??? D�marrer</button>
+    <button id="stopBtn" disabled>?? Arr�ter</button>
+    
     <div id="transcription">
-        <strong>Transcription finale :</strong>
+        <h3>Transcription :</h3>
         <p id="finalText"></p>
     </div>
-
     <div id="partialTranscription">
-        <strong>Transcription partielle :</strong>
+        <h3>En cours :</h3>
         <p id="partialText"></p>
     </div>
 
     <script>
         const socket = io();
-        let audioContext;
-        let processor;
-        let input;
-
-        const startButton = document.getElementById('startButton');
-        const stopButton = document.getElementById('stopButton');
+        let audioContext, processor, input;
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
         const finalText = document.getElementById('finalText');
         const partialText = document.getElementById('partialText');
-        const statusDiv = document.getElementById('status');
 
         async function startRecording() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioContext = new AudioContext({ sampleRate: 16000 });
                 input = audioContext.createMediaStreamSource(stream);
-                processor = audioContext.createScriptProcessor(2048, 1, 1);
-
-                input.connect(processor);
-                processor.connect(audioContext.destination);
+                processor = audioContext.createScriptProcessor(4096, 1, 1);
 
                 processor.onaudioprocess = (e) => {
                     const float32Array = e.inputBuffer.getChannelData(0);
                     const int16Array = new Int16Array(float32Array.length);
+                    
                     for (let i = 0; i < float32Array.length; i++) {
-                        int16Array[i] = Math.max(-32768, Math.min(32767, Math.floor(float32Array[i] * 32768)));
+                        int16Array[i] = Math.max(-32768, Math.min(32767, float32Array[i] * 32768));
                     }
+                    
                     socket.emit('audio_stream', int16Array.buffer);
                 };
 
-                startButton.disabled = true;
-                stopButton.disabled = false;
-                statusDiv.textContent = "Enregistrement en cours...";
+                input.connect(processor);
+                processor.connect(audioContext.destination);
+
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
             } catch (err) {
-                console.error("Erreur lors de l'acc�s au microphone :", err);
-                alert("Impossible d'acc�der au microphone. V�rifiez vos permissions.");
+                console.error("Erreur d'acc�s au microphone :", err);
             }
         }
 
         function stopRecording() {
-            if (processor && audioContext) {
+            if (processor) {
                 processor.disconnect();
                 input.disconnect();
                 audioContext.close();
             }
-            startButton.disabled = false;
-            stopButton.disabled = true;
-            statusDiv.textContent = "Enregistrement arr�t�.";
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
         }
-
-        startButton.onclick = startRecording;
-        stopButton.onclick = stopRecording;
 
         socket.on('transcription', (data) => {
             if (data.final) {
-                if (data.text.trim()) {
-                    finalText.textContent += ' ' + data.text;
-                }
+                finalText.textContent += ' ' + data.text;
                 partialText.textContent = '';
             } else {
-                if (data.text.trim()) {
-                    partialText.textContent = data.text;
-                }
+                partialText.textContent = data.text;
             }
         });
 
-        socket.on('connect', () => {
-            console.log('Connect� au serveur');
-            statusDiv.textContent = "Pr�t � enregistrer";
-        });
-
-        socket.on('disconnect', () => {
-            console.log('D�connect� du serveur');
-            stopRecording();
-            statusDiv.textContent = "Connexion perdue";
-        });
+        startBtn.onclick = startRecording;
+        stopBtn.onclick = stopRecording;
     </script>
 </body>
 </html>
