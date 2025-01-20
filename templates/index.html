@@ -6,9 +6,15 @@
     <title>Reconnaissance Vocale en Temps R�el</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <style>
-        #transcription {
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        #transcription, #partialTranscription {
             border: 1px solid #ccc;
-            padding: 10px;
+            padding: 15px;
             margin-top: 20px;
             min-height: 100px;
             background-color: #f9f9f9;
@@ -16,19 +22,24 @@
         #partialTranscription {
             color: gray;
             font-style: italic;
-            margin-top: 10px;
         }
         button {
             padding: 10px 20px;
             margin: 10px;
             font-size: 16px;
+            cursor: pointer;
+        }
+        #status {
+            color: green;
+            margin-top: 10px;
         }
     </style>
 </head>
 <body>
     <h1>Reconnaissance Vocale en Temps R�el</h1>
-    <button id="startButton">D�marrer l'enregistrement</button>
-    <button id="stopButton" disabled>Arr�ter l'enregistrement</button>
+    <button id="startButton">??? D�marrer l'enregistrement</button>
+    <button id="stopButton" disabled>?? Arr�ter l'enregistrement</button>
+    <div id="status"></div>
 
     <div id="transcription">
         <strong>Transcription finale :</strong>
@@ -50,13 +61,14 @@
         const stopButton = document.getElementById('stopButton');
         const finalText = document.getElementById('finalText');
         const partialText = document.getElementById('partialText');
+        const statusDiv = document.getElementById('status');
 
         async function startRecording() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioContext = new AudioContext({ sampleRate: 16000 });
                 input = audioContext.createMediaStreamSource(stream);
-                processor = audioContext.createScriptProcessor(1024, 1, 1);
+                processor = audioContext.createScriptProcessor(2048, 1, 1);
 
                 input.connect(processor);
                 processor.connect(audioContext.destination);
@@ -72,6 +84,7 @@
 
                 startButton.disabled = true;
                 stopButton.disabled = false;
+                statusDiv.textContent = "Enregistrement en cours...";
             } catch (err) {
                 console.error("Erreur lors de l'acc�s au microphone :", err);
                 alert("Impossible d'acc�der au microphone. V�rifiez vos permissions.");
@@ -86,6 +99,7 @@
             }
             startButton.disabled = false;
             stopButton.disabled = true;
+            statusDiv.textContent = "Enregistrement arr�t�.";
         }
 
         startButton.onclick = startRecording;
@@ -93,23 +107,26 @@
 
         socket.on('transcription', (data) => {
             if (data.final) {
-                // Ajouter le texte final � la transcription principale
-                finalText.textContent += ' ' + data.text;
-                // Effacer la transcription partielle
+                if (data.text.trim()) {
+                    finalText.textContent += ' ' + data.text;
+                }
                 partialText.textContent = '';
             } else {
-                // Afficher la transcription partielle
-                partialText.textContent = data.text;
+                if (data.text.trim()) {
+                    partialText.textContent = data.text;
+                }
             }
         });
 
         socket.on('connect', () => {
             console.log('Connect� au serveur');
+            statusDiv.textContent = "Pr�t � enregistrer";
         });
 
         socket.on('disconnect', () => {
             console.log('D�connect� du serveur');
             stopRecording();
+            statusDiv.textContent = "Connexion perdue";
         });
     </script>
 </body>
