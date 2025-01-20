@@ -1,85 +1,60 @@
-import sys
-import time
-import queue
-import sounddevice as sd
-from flask import Flask, render_template
-from flask_socketio import SocketIO, emit
+from flask import Flask, request, jsonify, render_template
 from vosk import Model, KaldiRecognizer
+import json
+import tempfile
+import os
+import wave
 
-# Initialisation de l'application Flask
+
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
 
-# Initialisation de la queue et du mod�le Vosk
-q = queue.Queue()
-
-# Liste pour stocker l'historique de la conversation
-conversation_history = []
-
-# Afficher un message pour indiquer que le mod�le Vosk est en train de se charger
-print("Chargement du modèle Vosk...")
-model = Model("model")  # Mod�le Vosk situ� dans le dossier 'model' dans la racine
-print("Modèle Vosk chargé avec succès.")
-samplerate = 16000  # Taux d'�chantillonnage
-recognizer = KaldiRecognizer(model, samplerate)
-
-def callback(indata, frames, time, status):
-    """Callback pour la capture audio."""
-    if status:
-        print(status, file=sys.stderr)
-    q.put(bytes(indata))
+# Assurez-vous que ce chemin pointe vers votre mod�le Vosk
+model = Model("./model")
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-@app.route('/start_transcription')
-def start_transcription():
-    global conversation_history
-    print("Transcription démarrée !")
-    phrase_complete = ""
-    last_time = time.time()
 
-    # Cr�er un flux audio
-    with sd.RawInputStream(samplerate=samplerate, blocksize=8000, dtype="int16", channels=1, callback=callback):
-        print("### Reconnaissance vocale en temps réel ###")
-        print("Parlez dans votre micro. Appuyez sur Ctrl+C pour quitter.")
-        print("##########################################\n")
-        
+from pydub import AudioSegment
+
+@app.route('/process-audio', methods=['POST'])
+def process_audio():
+    if 'audio' not in request.files:
+        return jsonify({"error": "Aucun fichier audio trouv�"}), 400
+    
+    audio_file = request.files['audio']
+    
+    # Sauvegarder temporairement le fichier audio
+    temp_input = "temp_input.webm"
+    temp_output = "temp_output.wav"
+    audio_file.save(temp_input)
+    
+    # Convertir en WAV PCM 16 kHz mono
+    sound = AudioSegment.from_file(temp_input)
+    sound = sound.set_frame_rate(16000).set_channels(1).set_sample_width(2)
+    sound.export(temp_output, format="wav")
+    
+    # Cr�er un reconnaisseur Kaldi
+    rec = KaldiRecognizer(model, 16000)
+    
+    # Lire et traiter l'audio converti
+    with open(temp_output, 'rb') as wf:
         while True:
-            data = q.get()  # R�cup�rer les donn�es audio
-            if recognizer.AcceptWaveform(data):
-                result = recognizer.Result()
-                phrase = result.split('"text" : "')[1].split('"')[0]
-                if phrase.strip():
-                    phrase_complete += phrase + " "
-                    print(f"Phrase complète : {phrase}")
-                    conversation_history.append(f"Utilisateur: {phrase}")
-                    socketio.emit('transcription', {'text': phrase_complete.strip(), 'history': conversation_history})
-            else:
-                partial_result = recognizer.PartialResult()
-                partial_phrase = partial_result.split('"partial" : "')[1].split('"')[0]
-                if partial_phrase.strip():
-                    print(f"Résultat partiel : {partial_phrase}", end="\r")
-                    socketio.emit('transcription', {'text': partial_phrase, 'history': conversation_history})
+            data = wf.read(4000)
+            if len(data) == 0:
+                break
+            rec.AcceptWaveform(data)
+    
+    # Obtenir le r�sultat final
+    final_result = json.loads(rec.FinalResult())
+    
+    os.remove(temp_input)  # Supprimer les fichiers temporaires
+    os.remove(temp_output)
+    
+    return jsonify({"transcription": final_result.get("text", "")})
 
-            # V�rifier s'il y a eu une pause (silence d�tect�)
-            current_time = time.time()
-            if current_time - last_time > 1.5:  # 1.5 secondes de silence
-                if phrase_complete.strip():
-                    print("\n### Fin de phrase détectée ###")
-                    print(f"Phrase complète accumulée : {phrase_complete.strip()}")
-                    conversation_history.append(f"Utilisateur: {phrase_complete.strip()}")
-                    socketio.emit('transcription', {'text': phrase_complete.strip(), 'history': conversation_history})
-                    phrase_complete = ""
-                last_time = current_time
 
-if __name__ == "__main__":
-    try:
-        socketio.run(app, host='0.0.0.0', port=5000, debug=True)
-    except KeyboardInterrupt:
-        print("\nReconnaissance vocale arrêtée.")
-        sys.exit(0)
-    except Exception as e:
-        print(f"Erreur : {str(e)}")
-        sys.exit(1)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)

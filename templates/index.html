@@ -3,41 +3,64 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reconnaissance vocale</title>
-    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
-    <script>
-        var socket = io.connect('http://' + document.domain + ':' + location.port);
-
-        // �couter les �v�nements de transcription
-        socket.on('transcription', function(data) {
-            document.getElementById("transcription").innerText = data.text;
-            // Mettre � jour l'historique
-            var historyDiv = document.getElementById("history");
-            historyDiv.innerHTML = "";
-            data.history.forEach(function(message) {
-                var p = document.createElement("p");
-                p.innerText = message;
-                historyDiv.appendChild(p);
-            });
-        });
-
-        function startTranscription() {
-            fetch('/start_transcription').then(response => response.json());
-        }
-    </script>
+    <title>Reconnaissance Vocale avec Vosk</title>
 </head>
 <body>
-    <h1>Reconnaissance vocale en temps réel</h1>
-    <button onclick="startTranscription()">Démarrer la transcription</button>
+    <h1>Reconnaissance Vocale avec Vosk</h1>
+    <button id="startRecording">Commencer l'enregistrement</button>
+    <button id="stopRecording" disabled>Arr�ter l'enregistrement</button>
+    <div id="result"></div>
 
-    <div>
-        <h2>Historique des conversations :</h2>
-        <div id="history"></div>
-    </div>
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
 
-    <div>
-        <h2>Transcription en cours :</h2>
-        <pre id="transcription"></pre>
-    </div>
+        const startButton = document.getElementById('startRecording');
+        const stopButton = document.getElementById('stopRecording');
+        const resultDiv = document.getElementById('result');
+
+        startButton.onclick = async () => {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+            mediaRecorder.start();
+
+            mediaRecorder.ondataavailable = (event) => {
+                audioChunks.push(event.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                sendAudioToServer(audioBlob);
+                audioChunks = [];
+            };
+
+            startButton.disabled = true;
+            stopButton.disabled = false;
+        };
+
+        stopButton.onclick = () => {
+            mediaRecorder.stop();
+            startButton.disabled = false;
+            stopButton.disabled = true;
+        };
+
+        function sendAudioToServer(audioBlob) {
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'recording.webm');
+
+            fetch('/process-audio', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                resultDiv.textContent = `Transcription: ${data.transcription}`;
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+                resultDiv.textContent = "Erreur lors de la transcription.";
+            });
+        }
+    </script>
 </body>
 </html>
