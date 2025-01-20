@@ -3,64 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reconnaissance Vocale avec Vosk</title>
+    <title>Reconnaissance Vocale en Temps R�el</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        #transcription {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 20px;
+            min-height: 100px;
+        }
+    </style>
 </head>
 <body>
-    <h1>Reconnaissance Vocale avec Vosk</h1>
-    <button id="startRecording">Commencer l'enregistrement</button>
-    <button id="stopRecording" disabled>Arr�ter l'enregistrement</button>
-    <div id="result"></div>
+    <h1>Reconnaissance Vocale en Temps R�el</h1>
+    <button id="startButton">D�marrer l'enregistrement</button>
+    <button id="stopButton" disabled>Arr�ter l'enregistrement</button>
+    <div id="transcription"></div>
 
     <script>
-        let mediaRecorder;
-        let audioChunks = [];
+        const socket = io();
+        let audioContext;
+        let processor;
+        let input;
+        
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const transcriptionDiv = document.getElementById('transcription');
 
-        const startButton = document.getElementById('startRecording');
-        const stopButton = document.getElementById('stopRecording');
-        const resultDiv = document.getElementById('result');
-
-        startButton.onclick = async () => {
+        async function startRecording() {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-            mediaRecorder.start();
+            audioContext = new AudioContext({sampleRate: 16000});
+            input = audioContext.createMediaStreamSource(stream);
+            processor = audioContext.createScriptProcessor(1024, 1, 1);
 
-            mediaRecorder.ondataavailable = (event) => {
-                audioChunks.push(event.data);
-            };
+            input.connect(processor);
+            processor.connect(audioContext.destination);
 
-            mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                sendAudioToServer(audioBlob);
-                audioChunks = [];
+            processor.onaudioprocess = (e) => {
+                const float32Array = e.inputBuffer.getChannelData(0);
+                const int16Array = new Int16Array(float32Array.length);
+                for (let i = 0; i < float32Array.length; i++) {
+                    int16Array[i] = Math.max(-32768, Math.min(32767, Math.floor(float32Array[i] * 32768)));
+                }
+                socket.emit('audio_stream', int16Array.buffer);
             };
 
             startButton.disabled = true;
             stopButton.disabled = false;
-        };
+        }
 
-        stopButton.onclick = () => {
-            mediaRecorder.stop();
+        function stopRecording() {
+            if (processor && audioContext) {
+                processor.disconnect();
+                input.disconnect();
+                audioContext.close();
+            }
             startButton.disabled = false;
             stopButton.disabled = true;
-        };
-
-        function sendAudioToServer(audioBlob) {
-            const formData = new FormData();
-            formData.append('audio', audioBlob, 'recording.webm');
-
-            fetch('/process-audio', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                resultDiv.textContent = `Transcription: ${data.transcription}`;
-            })
-            .catch(error => {
-                console.error('Erreur:', error);
-                resultDiv.textContent = "Erreur lors de la transcription.";
-            });
         }
+
+        startButton.onclick = startRecording;
+        stopButton.onclick = stopRecording;
+
+        socket.on('transcription', (data) => {
+            transcriptionDiv.textContent += ' ' + data.text;
+        });
+
+        socket.on('connect', () => {
+            console.log('Connected to server');
+        });
+
+        socket.on('disconnect', () => {
+            console.log('Disconnected from server');
+            stopRecording();
+        });
     </script>
 </body>
 </html>

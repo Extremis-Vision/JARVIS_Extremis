@@ -1,60 +1,62 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, render_template, request
+from flask_socketio import SocketIO, emit
 from vosk import Model, KaldiRecognizer
 import json
-import tempfile
-import os
-import wave
-
 
 app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Assurez-vous que ce chemin pointe vers votre mod�le Vosk
 model = Model("./model")
+
+# Utiliser un dictionnaire pour stocker les reconnaisseurs par session
+recognizers = {}
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
+@socketio.on('connect')
+def handle_connect():
+    session_id = request.sid
+    recognizers[session_id] = KaldiRecognizer(model, 16000)
+    print(f"New connection: {session_id}")
 
-from pydub import AudioSegment
+@socketio.on('disconnect')
+def handle_disconnect():
+    session_id = request.sid
+    if session_id in recognizers:
+        del recognizers[session_id]
+    print(f"Disconnected: {session_id}")
 
-@app.route('/process-audio', methods=['POST'])
-def process_audio():
-    if 'audio' not in request.files:
-        return jsonify({"error": "Aucun fichier audio trouv�"}), 400
+@socketio.on('audio_stream')
+def handle_audio_stream(data):
+    session_id = request.sid
+    recognizer = recognizers.get(session_id)
     
-    audio_file = request.files['audio']
+    if recognizer is None:
+        return
     
-    # Sauvegarder temporairement le fichier audio
-    temp_input = "temp_input.webm"
-    temp_output = "temp_output.wav"
-    audio_file.save(temp_input)
-    
-    # Convertir en WAV PCM 16 kHz mono
-    sound = AudioSegment.from_file(temp_input)
-    sound = sound.set_frame_rate(16000).set_channels(1).set_sample_width(2)
-    sound.export(temp_output, format="wav")
-    
-    # Cr�er un reconnaisseur Kaldi
-    rec = KaldiRecognizer(model, 16000)
-    
-    # Lire et traiter l'audio converti
-    with open(temp_output, 'rb') as wf:
-        while True:
-            data = wf.read(4000)
-            if len(data) == 0:
-                break
-            rec.AcceptWaveform(data)
-    
-    # Obtenir le r�sultat final
-    final_result = json.loads(rec.FinalResult())
-    
-    os.remove(temp_input)  # Supprimer les fichiers temporaires
-    os.remove(temp_output)
-    
-    return jsonify({"transcription": final_result.get("text", "")})
+    try:
+        print(f"Received audio data of length: {len(data)}")
+        if len(data) == 0:
+            print("Warning: Received empty audio data")
+            return
 
+        if recognizer.AcceptWaveform(data):
+            result = json.loads(recognizer.Result())
+            print(f"Final result: {result}")
+            emit('transcription', {'text': result.get('text', '')})
+        else:
+            partial_result = json.loads(recognizer.PartialResult())
+            print(f"Partial result: {partial_result}")
+            emit('transcription', {'text': partial_result.get('partial', '')})
+    except Exception as e:
+        print(f"Error processing audio stream: {e}")
 
+@socketio.on_error_default
+def default_error_handler(e):
+    print(f"An error occurred: {e}")
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
