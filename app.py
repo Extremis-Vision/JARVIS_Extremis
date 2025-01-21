@@ -5,6 +5,8 @@ import json
 import logging
 import traceback
 import os
+import numpy as np
+from openai import OpenAI
 
 # Configuration des logs
 logging.basicConfig(
@@ -12,6 +14,9 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s: %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Configuration OpenAI
+client = OpenAI(base_url="http://localhost:1234/v1", api_key="lm-studio")
 
 app = Flask(__name__)
 socketio = SocketIO(
@@ -27,32 +32,73 @@ model = None
 recognizers = {}
 
 def initialize_vosk_model(model_path):
-    """Initialisation s�curis�e du mod�le Vosk"""
+    """Initialisation sécurisée du modèle Vosk"""
     global model
     try:
-        # V�rification du chemin du mod�le
         if not os.path.exists(model_path):
-            logger.error(f"Chemin du mod�le invalide : {model_path}")
+            logger.error(f"Chemin du modèle invalide : {model_path}")
             return None
         
         model = Model(model_path)
-        logger.info("Mod�le Vosk charg� avec succ�s")
+        logger.info("Modèle Vosk chargé avec succès")
         return model
     except Exception as e:
-        logger.error(f"Erreur de chargement du mod�le Vosk : {e}")
+        logger.error(f"Erreur de chargement du modèle Vosk : {e}")
         logger.error(traceback.format_exc())
         return None
 
 def clean_text(text):
     """Nettoyage et normalisation du texte"""
     try:
-        # Suppression des caract�res sp�ciaux et normalisation
         text = text.strip()
         text = ''.join(char for char in text if char.isprintable())
         return text.lower()
     except Exception as e:
         logger.error(f"Erreur de nettoyage du texte : {e}")
         return ""
+
+def appel_llm(transcription):
+    """Appel � l'API du mod�le LLM pour g�n�rer une r�ponse"""
+    try:
+        history = [
+            {"role": "user", "content": transcription}
+        ]
+
+        completion = client.chat.completions.create(
+            model="lmstudio-community/Llama-3.2-1B-Instruct-GGUF",
+            messages=history,
+            temperature=0.7,
+            stream=True
+        )
+
+        response_text = ""
+        for chunk in completion:
+            if chunk.choices[0].delta.content is not None:
+                chunk_text = chunk.choices[0].delta.content
+                response_text += chunk_text
+                
+                socketio.emit('assistant_response_stream', {
+                    'text': chunk_text,
+                    'is_final': False
+                })
+                socketio.sleep(0.05)  # Petit d�lai pour fluidifier l'affichage
+
+        # �mettre la fin de la r�ponse
+        socketio.emit('assistant_response_stream', {
+            'text': '',
+            'is_final': True
+        })
+
+        return response_text
+
+    except Exception as e:
+        logger.error("Erreur lors de l'acc�s � la r�ponse: %s", e)
+        socketio.emit('assistant_response_stream', {
+            'text': "Une erreur s'est produite.",
+            'is_final': True
+        })
+        return "Une erreur s'est produite."
+
 
 @app.route('/')
 def index():
@@ -61,72 +107,57 @@ def index():
 @socketio.on('connect')
 def handle_connect():
     if model is None:
-        logger.warning("Mod�le Vosk non initialis�")
+        logger.warning("Modèle Vosk non initialisé")
         return False
     
     session_id = request.sid
     try:
-        # Cr�ation d'un nouveau recognizer par session
         recognizer = KaldiRecognizer(model, 16000)
-        recognizers[session_id] = recognizer
+        recognizers[session_id] = {
+            'recognizer': recognizer,
+            'transcription': ''
+        }
         logger.info(f"Nouvelle connexion : {session_id}")
     except Exception as e:
-        logger.error(f"Erreur de cr�ation du recognizer : {e}")
+        logger.error(f"Erreur de création du recognizer : {e}")
         logger.error(traceback.format_exc())
         return False
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    session_id = request.sid
-    if session_id in recognizers:
-        del recognizers[session_id]
-    logger.info(f"D�connexion : {session_id}")
 
 @socketio.on('audio_stream')
 def handle_audio_stream(data):
     session_id = request.sid
-    recognizer = recognizers.get(session_id)
+    session_data = recognizers.get(session_id)
     
-    if recognizer is None:
+    if session_data is None:
         logger.warning("Pas de recognizer pour cette session")
         return
 
+    recognizer = session_data['recognizer']
+    
     try:
-        # Conversion s�curis�e des donn�es
         if isinstance(data, dict) and '_placeholder' in data:
             return
         
-        # V�rification de la taille des donn�es
-        if len(data) < 2048:
-            logger.warning("Donn�es audio insuffisantes")
+        audio_data = np.frombuffer(data, dtype=np.int16)
+
+        if len(audio_data) < 2048:
+            logger.warning("Données audio insuffisantes")
             return
 
-        # Traitement des donn�es audio avec gestion des erreurs
-        try:
-            if recognizer.AcceptWaveform(data):
-                result = json.loads(recognizer.Result())
-                text = clean_text(result.get('text', ''))
+        if recognizer.AcceptWaveform(audio_data.tobytes()):
+            result = json.loads(recognizer.Result())
+            text = clean_text(result.get('text', ''))
+            
+            if text:
+                logger.info(f"Résultat final : {text}")
+                socketio.emit('transcription', {
+                    'text': text, 
+                    'final': True
+                })
                 
-                if text:
-                    logger.info(f"R�sultat final : {text}")
-                    socketio.emit('transcription', {
-                        'text': text, 
-                        'final': True
-                    })
-            else:
-                partial_result = json.loads(recognizer.PartialResult())
-                text = clean_text(partial_result.get('partial', ''))
-                
-                if text:
-                    logger.info(f"R�sultat partiel : {text}")
-                    socketio.emit('transcription', {
-                        'text': text, 
-                        'final': False
-                    })
-        except Exception as vosk_error:
-            logger.error(f"Erreur Vosk lors du traitement audio : {vosk_error}")
-            logger.error(traceback.format_exc())
-    
+                socketio.start_background_task(appel_llm, text)
+                socketio.emit('stop_recording', room=session_id)
+
     except Exception as e:
         logger.error(f"Erreur de traitement audio globale : {e}")
         logger.error(traceback.format_exc())
@@ -137,24 +168,23 @@ def default_error_handler(e):
     logger.error(traceback.format_exc())
 
 def find_vosk_model():
-    """Recherche automatique du mod�le Vosk"""
+    """Recherche automatique du modèle Vosk"""
     possible_paths = [
-        "./model",  # R�pertoire local
-        "./vosk-model-fr",  # Mod�le fran�ais
-        os.path.expanduser("~/vosk-model-fr"),  # R�pertoire utilisateur
-        "/usr/local/share/vosk-model-fr",  # R�pertoire syst�me
+        "./model",
+        "./vosk-model-fr",
+        os.path.expanduser("~/vosk-model-fr"),
+        "/usr/local/share/vosk-model-fr",
     ]
     
     for path in possible_paths:
         if os.path.exists(path):
-            logger.info(f"Mod�le Vosk trouv� : {path}")
+            logger.info(f"Modèle Vosk trouvé : {path}")
             return path
     
-    logger.error("Aucun mod�le Vosk trouv�")
+    logger.error("Aucun modèle Vosk trouvé")
     return None
 
 if __name__ == '__main__':
-    # Recherche et initialisation du mod�le Vosk
     model_path = find_vosk_model()
     
     if model_path:
@@ -168,6 +198,6 @@ if __name__ == '__main__':
                 debug=True
             )
         else:
-            logger.error("Impossible de charger le mod�le Vosk")
+            logger.error("Impossible de charger le modèle Vosk")
     else:
-        logger.error("Aucun mod�le Vosk disponible")
+        logger.error("Aucun modèle Vosk disponible")

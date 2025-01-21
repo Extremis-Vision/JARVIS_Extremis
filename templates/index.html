@@ -3,54 +3,105 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reconnaissance Vocale en Temps R�el</title>
+    <title>Assistant Vocal</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.min.js"></script>
     <style>
         body { 
             font-family: Arial, sans-serif; 
             max-width: 800px; 
             margin: 0 auto; 
-            padding: 20px; 
+            padding: 20px;
+            background-color: #f4f4f4;
         }
-        #transcription, #partialTranscription {
+        
+        #chat {
             border: 1px solid #ccc;
-            padding: 15px;
-            margin-top: 20px;
-            min-height: 100px;
-            background-color: #f9f9f9;
+            height: 400px;
+            overflow-y: scroll;
+            padding: 10px;
+            margin-bottom: 20px;
+            background-color: white;
+            border-radius: 8px;
         }
-        button { 
-            padding: 10px 20px; 
-            margin: 10px; 
-            cursor: pointer; 
+
+        .message {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            max-width: 80%;
+            word-wrap: break-word;
+            position: relative;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .user { 
+            background-color: #e6f2ff; 
+            align-self: flex-end;
+            margin-left: auto;
+        }
+        
+        .assistant { 
+            background-color: #f0f0f0; 
+            align-self: flex-start;
+        }
+
+        #microphone {
+            font-size: 2em;
+            cursor: pointer;
+            text-align: center;
+            padding: 10px;
+            background-color: #f1f1f1;
+            border-radius: 50%;
+            transition: background-color 0.3s;
+        }
+
+        #microphone:hover {
+            background-color: #e0e0e0;
+        }
+
+        @keyframes fadeIn {
+            from { 
+                opacity: 0; 
+                transform: translateY(10px); 
+            }
+            to { 
+                opacity: 1; 
+                transform: translateY(0); 
+            }
+        }
+
+        #chat {
+            display: flex;
+            flex-direction: column;
         }
     </style>
 </head>
 <body>
-    <h1>Reconnaissance Vocale</h1>
-    <button id="startBtn">??? D�marrer</button>
-    <button id="stopBtn" disabled>?? Arr�ter</button>
+    <h1>Assistant Vocal</h1>
     
-    <div id="transcription">
-        <h3>Transcription :</h3>
-        <p id="finalText"></p>
-    </div>
-    <div id="partialTranscription">
-        <h3>En cours :</h3>
-        <p id="partialText"></p>
-    </div>
+    <div id="chat"></div>
+    
+    <div id="microphone">🎙️</div>
 
     <script>
         const socket = io();
-        let audioContext, processor, input;
-        const startBtn = document.getElementById('startBtn');
-        const stopBtn = document.getElementById('stopBtn');
-        const finalText = document.getElementById('finalText');
-        const partialText = document.getElementById('partialText');
+        const chatDiv = document.getElementById('chat');
+        const microphoneBtn = document.getElementById('microphone');
+        let audioContext, processor, input, stream;
+        let isRecording = false;
+        let currentAssistantMessage = null;
+
+        function addMessage(text, type) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message', type);
+            messageDiv.textContent = text;
+            chatDiv.appendChild(messageDiv);
+            chatDiv.scrollTop = chatDiv.scrollHeight;
+        }
 
         async function startRecording() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioContext = new AudioContext({ sampleRate: 16000 });
                 input = audioContext.createMediaStreamSource(stream);
                 processor = audioContext.createScriptProcessor(4096, 1, 1);
@@ -69,10 +120,11 @@
                 input.connect(processor);
                 processor.connect(audioContext.destination);
 
-                startBtn.disabled = true;
-                stopBtn.disabled = false;
+                isRecording = true;
+                microphoneBtn.textContent = '🟥';
+                addMessage('Enregistrement en cours...', 'assistant');
             } catch (err) {
-                console.error("Erreur d'acc�s au microphone :", err);
+                console.error("Erreur d'accès au microphone :", err);
             }
         }
 
@@ -82,21 +134,54 @@
                 input.disconnect();
                 audioContext.close();
             }
-            startBtn.disabled = false;
-            stopBtn.disabled = true;
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            isRecording = false;
+            microphoneBtn.textContent = '🎙️';
+            addMessage('Enregistrement terminé', 'assistant');
         }
 
         socket.on('transcription', (data) => {
             if (data.final) {
-                finalText.textContent += ' ' + data.text;
-                partialText.textContent = '';
-            } else {
-                partialText.textContent = data.text;
+                addMessage(data.text, 'user');
             }
         });
 
-        startBtn.onclick = startRecording;
-        stopBtn.onclick = stopRecording;
+        socket.on('assistant_response_stream', (data) => {
+            // Créer le message si c'est le premier chunk
+            if (!currentAssistantMessage) {
+                currentAssistantMessage = document.createElement('div');
+                currentAssistantMessage.classList.add('message', 'assistant');
+                chatDiv.appendChild(currentAssistantMessage);
+            }
+
+            // Ajouter le texte au fur et à mesure
+            if (!data.is_final) {
+                // Ajouter le nouveau texte
+                currentAssistantMessage.textContent += data.text;
+                
+                // Scroll automatique
+                chatDiv.scrollTop = chatDiv.scrollHeight;
+            } 
+            
+            // Fin de la réponse
+            if (data.is_final) {
+                currentAssistantMessage = null;
+            }
+        });
+
+        socket.on('stop_recording', () => {
+            stopRecording();
+        });
+
+        microphoneBtn.onclick = () => {
+            if (!isRecording) {
+                startRecording();
+            } else {
+                stopRecording();
+            }
+        };
     </script>
 </body>
 </html>
