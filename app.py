@@ -29,17 +29,46 @@ socketio = SocketIO(
 
 # Variables globales
 model = None
+VOSK_MODEL_PATH = None
 recognizers = {}
 
-def initialize_vosk_model(model_path):
+def find_vosk_model():
+    """Recherche automatique du modèle Vosk"""
+    global VOSK_MODEL_PATH
+    possible_paths = [
+        "./model",
+        "./vosk-model-fr",
+        os.path.expanduser("~/vosk-model-fr"),
+        "/usr/local/share/vosk-model-fr",
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            logger.info(f"Modèle Vosk trouvé : {path}")
+            VOSK_MODEL_PATH = path
+            return path
+    
+    logger.error("Aucun modèle Vosk trouvé")
+    return None
+
+def initialize_vosk_model():
     """Initialisation sécurisée du modèle Vosk"""
-    global model
+    global model, VOSK_MODEL_PATH
+    
+    # Si le modèle est déjà chargé, ne pas le recharger
+    if model is not None:
+        return model
+    
     try:
-        if not os.path.exists(model_path):
-            logger.error(f"Chemin du modèle invalide : {model_path}")
+        # Si le chemin n'a pas été défini, chercher un modèle
+        if VOSK_MODEL_PATH is None:
+            find_vosk_model()
+        
+        if not os.path.exists(VOSK_MODEL_PATH):
+            logger.error(f"Chemin du modèle invalide : {VOSK_MODEL_PATH}")
             return None
         
-        model = Model(model_path)
+        model = Model(VOSK_MODEL_PATH)
         logger.info("Modèle Vosk chargé avec succès")
         return model
     except Exception as e:
@@ -58,7 +87,7 @@ def clean_text(text):
         return ""
 
 def appel_llm(transcription):
-    """Appel � l'API du mod�le LLM pour g�n�rer une r�ponse"""
+    """Appel à l'API du modèle LLM pour générer une réponse"""
     try:
         history = [
             {"role": "user", "content": transcription}
@@ -81,9 +110,9 @@ def appel_llm(transcription):
                     'text': chunk_text,
                     'is_final': False
                 })
-                socketio.sleep(0.05)  # Petit d�lai pour fluidifier l'affichage
+                socketio.sleep(0.05)  # Petit délai pour fluidifier l'affichage
 
-        # �mettre la fin de la r�ponse
+        # Émettre la fin de la réponse
         socketio.emit('assistant_response_stream', {
             'text': '',
             'is_final': True
@@ -92,13 +121,12 @@ def appel_llm(transcription):
         return response_text
 
     except Exception as e:
-        logger.error("Erreur lors de l'acc�s � la r�ponse: %s", e)
+        logger.error("Erreur lors de l'accès à la réponse: %s", e)
         socketio.emit('assistant_response_stream', {
             'text': "Une erreur s'est produite.",
             'is_final': True
         })
         return "Une erreur s'est produite."
-
 
 @app.route('/')
 def index():
@@ -106,6 +134,10 @@ def index():
 
 @socketio.on('connect')
 def handle_connect():
+    # Initialiser le modèle si nécessaire
+    if model is None:
+        initialize_vosk_model()
+    
     if model is None:
         logger.warning("Modèle Vosk non initialisé")
         return False
@@ -167,37 +199,16 @@ def default_error_handler(e):
     logger.error(f"Une erreur est survenue : {e}")
     logger.error(traceback.format_exc())
 
-def find_vosk_model():
-    """Recherche automatique du modèle Vosk"""
-    possible_paths = [
-        "./model",
-        "./vosk-model-fr",
-        os.path.expanduser("~/vosk-model-fr"),
-        "/usr/local/share/vosk-model-fr",
-    ]
-    
-    for path in possible_paths:
-        if os.path.exists(path):
-            logger.info(f"Modèle Vosk trouvé : {path}")
-            return path
-    
-    logger.error("Aucun modèle Vosk trouvé")
-    return None
-
 if __name__ == '__main__':
-    model_path = find_vosk_model()
+    # Charger le modèle une seule fois avant de démarrer le serveur
+    initialize_vosk_model()
     
-    if model_path:
-        model = initialize_vosk_model(model_path)
-        
-        if model:
-            socketio.run(
-                app, 
-                host='0.0.0.0', 
-                port=5000, 
-                debug=True
-            )
-        else:
-            logger.error("Impossible de charger le modèle Vosk")
+    if model:
+        socketio.run(
+            app, 
+            host='0.0.0.0', 
+            port=5000, 
+            debug=True
+        )
     else:
-        logger.error("Aucun modèle Vosk disponible")
+        logger.error("Impossible de charger le modèle Vosk")
