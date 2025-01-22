@@ -49,7 +49,7 @@ Jarvis est un assistant personnel intelligent conçu pour répondre aux besoins 
 - [ ] **Organisation automatique des fichiers et tags 📂**  
 - [ ] **Tri des emails et intégration agenda ✉️**  
 - [ ] **Accès au contenu gratuit des articles de journaux 📰**  
-- [ ] **Interface Flask avec base de données pour interactions visuelles 🖥️**  
+- [x] **Interface Flask avec base de données pour interactions visuelles 🖥️**  
 
 ---
 
