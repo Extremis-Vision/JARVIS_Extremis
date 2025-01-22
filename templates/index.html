@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Assistant Vocal</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.min.js"></script>
     <style>
         body { 
             font-family: Arial, sans-serif; 
@@ -22,6 +21,8 @@
             margin-bottom: 20px;
             background-color: white;
             border-radius: 8px;
+            display: flex;
+            flex-direction: column;
         }
 
         .message {
@@ -43,6 +44,11 @@
         .assistant { 
             background-color: #f0f0f0; 
             align-self: flex-start;
+        }
+
+        .partial {
+            opacity: 0.7;
+            font-style: italic;
         }
 
         #microphone {
@@ -70,9 +76,29 @@
             }
         }
 
-        #chat {
+        #text-input-container {
             display: flex;
-            flex-direction: column;
+            margin-top: 20px;
+        }
+        #text-input {
+            flex-grow: 1;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        #send-text {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        #send-text:hover {
+            background-color: #45a049;
         }
     </style>
 </head>
@@ -81,21 +107,57 @@
     
     <div id="chat"></div>
     
-    <div id="microphone">🎙️</div>
+    <div id="microphone">🎤</div>
 
+    <div id="text-input-container">
+        <input type="text" id="text-input" placeholder="Entrez votre message...">
+        <button id="send-text">Envoyer</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.min.js"></script>
     <script>
         const socket = io();
         const chatDiv = document.getElementById('chat');
         const microphoneBtn = document.getElementById('microphone');
+        const textInput = document.getElementById('text-input');
+        const sendTextBtn = document.getElementById('send-text');
         let audioContext, processor, input, stream;
         let isRecording = false;
         let currentAssistantMessage = null;
+        let currentTranscription = '';
+
+        socket.on('connect', () => {
+            console.log('Connecté au serveur Socket.IO');
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error('Erreur de connexion Socket.IO:', error);
+        });
+
+        function updatePartialTranscription(text) {
+            let transcriptionDiv = document.getElementById('partial-transcription');
+            if (!transcriptionDiv) {
+                transcriptionDiv = document.createElement('div');
+                transcriptionDiv.id = 'partial-transcription';
+                transcriptionDiv.classList.add('message', 'user', 'partial');
+                chatDiv.appendChild(transcriptionDiv);
+            }
+            transcriptionDiv.textContent = text;
+            chatDiv.scrollTop = chatDiv.scrollHeight;
+        }
 
         function addMessage(text, type) {
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('message', type);
             messageDiv.textContent = text;
             chatDiv.appendChild(messageDiv);
+            
+            // Supprimer la transcription partielle si elle existe
+            const partialTranscription = document.getElementById('partial-transcription');
+            if (partialTranscription) {
+                partialTranscription.remove();
+            }
+            
             chatDiv.scrollTop = chatDiv.scrollHeight;
         }
 
@@ -121,7 +183,7 @@
                 processor.connect(audioContext.destination);
 
                 isRecording = true;
-                microphoneBtn.textContent = '🟥';
+                microphoneBtn.textContent = '🔴';
                 addMessage('Enregistrement en cours...', 'assistant');
             } catch (err) {
                 console.error("Erreur d'accès au microphone :", err);
@@ -138,34 +200,32 @@
                 stream.getTracks().forEach(track => track.stop());
             }
             isRecording = false;
-            microphoneBtn.textContent = '🎙️';
+            microphoneBtn.textContent = '🎤';
             addMessage('Enregistrement terminé', 'assistant');
         }
 
         socket.on('transcription', (data) => {
             if (data.final) {
                 addMessage(data.text, 'user');
+                currentTranscription = '';
+            } else {
+                currentTranscription = data.text;
+                updatePartialTranscription(currentTranscription);
             }
         });
 
         socket.on('assistant_response_stream', (data) => {
-            // Créer le message si c'est le premier chunk
             if (!currentAssistantMessage) {
                 currentAssistantMessage = document.createElement('div');
                 currentAssistantMessage.classList.add('message', 'assistant');
                 chatDiv.appendChild(currentAssistantMessage);
             }
 
-            // Ajouter le texte au fur et à mesure
             if (!data.is_final) {
-                // Ajouter le nouveau texte
                 currentAssistantMessage.textContent += data.text;
-                
-                // Scroll automatique
                 chatDiv.scrollTop = chatDiv.scrollHeight;
             } 
             
-            // Fin de la réponse
             if (data.is_final) {
                 currentAssistantMessage = null;
             }
@@ -182,6 +242,20 @@
                 stopRecording();
             }
         };
+
+        sendTextBtn.onclick = () => {
+            const text = textInput.value.trim();
+            if (text) {
+                socket.emit('text_input', { text: text });
+                textInput.value = '';
+            }
+        };
+
+        textInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendTextBtn.click();
+            }
+        });
     </script>
 </body>
 </html>

@@ -45,7 +45,6 @@ def find_vosk_model():
     for path in possible_paths:
         if os.path.exists(path):
             logger.info(f"Modèle Vosk trouvé : {path}")
-            VOSK_MODEL_PATH = path
             return path
     
     logger.error("Aucun modèle Vosk trouvé")
@@ -55,16 +54,14 @@ def initialize_vosk_model():
     """Initialisation sécurisée du modèle Vosk"""
     global model, VOSK_MODEL_PATH
     
-    # Si le modèle est déjà chargé, ne pas le recharger
     if model is not None:
         return model
     
     try:
-        # Si le chemin n'a pas été défini, chercher un modèle
         if VOSK_MODEL_PATH is None:
-            find_vosk_model()
+            VOSK_MODEL_PATH = find_vosk_model()
         
-        if not os.path.exists(VOSK_MODEL_PATH):
+        if not VOSK_MODEL_PATH or not os.path.exists(VOSK_MODEL_PATH):
             logger.error(f"Chemin du modèle invalide : {VOSK_MODEL_PATH}")
             return None
         
@@ -134,13 +131,7 @@ def index():
 
 @socketio.on('connect')
 def handle_connect():
-    # Initialiser le modèle si nécessaire
-    if model is None:
-        initialize_vosk_model()
-    
-    if model is None:
-        logger.warning("Modèle Vosk non initialisé")
-        return False
+    global model
     
     session_id = request.sid
     try:
@@ -189,6 +180,14 @@ def handle_audio_stream(data):
                 
                 socketio.start_background_task(appel_llm, text)
                 socketio.emit('stop_recording', room=session_id)
+        else:
+            partial_result = json.loads(recognizer.PartialResult())
+            partial_text = clean_text(partial_result.get('partial', ''))
+            if partial_text:
+                socketio.emit('transcription', {
+                    'text': partial_text,
+                    'final': False
+                })
 
     except Exception as e:
         logger.error(f"Erreur de traitement audio globale : {e}")
@@ -199,9 +198,20 @@ def default_error_handler(e):
     logger.error(f"Une erreur est survenue : {e}")
     logger.error(traceback.format_exc())
 
+@socketio.on('text_input')
+def handle_text_input(data):
+    text = data.get('text', '')
+    if text:
+        logger.info(f"Texte reçu : {text}")
+        socketio.emit('transcription', {
+            'text': text, 
+            'final': True
+        })
+        socketio.start_background_task(appel_llm, text)
+
 if __name__ == '__main__':
     # Charger le modèle une seule fois avant de démarrer le serveur
-    initialize_vosk_model()
+    model = initialize_vosk_model()
     
     if model:
         socketio.run(
