@@ -7,11 +7,14 @@ def météo(city):
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
-        temperature = data['main']['temp']
-        description = data['weather'][0]['description']
-        return temperature, description
-    else:
-        return None, None
-    
+        liste = {}
+        liste["temperature"] = data['main']['temp']
+        liste["description"] = data['weather'][0]['description']
+        liste["humiditer"] = data['main']["humidity"]
+        liste["temp_max"] = data['main']["temp_max"]
+        liste["temp_min"] = data['main']["temp_min"]
 
-print(météo("Paris"))
+        return liste
+    else:
+        return None
+    

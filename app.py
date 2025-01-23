@@ -7,6 +7,8 @@ import traceback
 import os
 import numpy as np
 from openai import OpenAI
+import fonction_jarvis
+import fonction_jarvis.meteo
 
 # Configuration des logs
 logging.basicConfig(
@@ -178,8 +180,28 @@ def handle_audio_stream(data):
                     'final': True
                 })
                 
-                socketio.start_background_task(appel_llm, text)
                 socketio.emit('stop_recording', room=session_id)
+
+                if "quelle est la météo à" in  text:
+                    ville = text.replace("quelle est la météo à","")
+                    temperature = fonction_jarvis.meteo.météo(ville)
+                    if temperature is not None:
+                        text += f" La température à {ville} est de {temperature["temperature"]} en °C (max : {temperature["temp_max"]}, min : {temperature["temp_min"]}) avec {temperature["humiditer"]} % d'humiditer a savoir que {temperature["description"]} donne uniquement les informations importante avec un commentaire sur ce que tu conseille de porter et aussile tous en français"
+                        print(text)
+                    else:
+                        text += " Je n'ai pas pu récupérer les informations météo."
+
+                elif "quelle est la météo" in  text:
+                    ville = "Seppois-le-Haut"
+                    temperature = fonction_jarvis.meteo.météo(ville)
+                    if temperature is not None:
+                        text += f" La température à {ville} est de {temperature["temperature"]} en °C (max : {temperature["temp_max"]}, min : {temperature["temp_min"]}) avec {temperature["humiditer"]} % d'humiditer a savoir que {temperature["description"]} donne uniquement les informations importante avec un commentaire sur ce que tu conseille de porter et aussile tous en français"
+                        print(text)
+                    else:
+                        text += " Je n'ai pas pu récupérer les informations météo."
+
+                socketio.start_background_task(appel_llm, text)
+                
         else:
             partial_result = json.loads(recognizer.PartialResult())
             partial_text = clean_text(partial_result.get('partial', ''))
