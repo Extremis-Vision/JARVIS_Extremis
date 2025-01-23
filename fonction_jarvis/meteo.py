@@ -1,7 +1,7 @@
 import requests
 
 def météo(city):
-    api_key = '567e1f8cb838f5f2ed71e8ca6281e700'
+    api_key = 'bb158fe427638ce39503671c8179386d'
     url = f'http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric'
     
     response = requests.get(url)
@@ -12,3 +12,6 @@ def météo(city):
         return temperature, description
     else:
         return None, None
+    
+
+print(météo("Paris"))
