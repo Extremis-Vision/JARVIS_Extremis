@@ -9,7 +9,6 @@ import numpy as np
 from openai import OpenAI
 import fonction_jarvis
 import fonction_jarvis.meteo
-import re
 
 # Configuration des logs
 logging.basicConfig(
@@ -86,11 +85,6 @@ def clean_text(text):
         logger.error(f"Erreur de nettoyage du texte : {e}")
         return ""
 
-def remove_think_tags(text):
-    """Supprime les balises <think></think> et leur contenu du texte."""
-    return re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
-
-
 def appel_llm(transcription):
     """Appel à l'API du modèle LLM pour générer une réponse"""
     try:
@@ -110,12 +104,9 @@ def appel_llm(transcription):
             if chunk.choices[0].delta.content is not None:
                 chunk_text = chunk.choices[0].delta.content
                 response_text += chunk_text
-
-                # Supprimer les balises <think></think>
-                cleaned_chunk_text = remove_think_tags(chunk_text)
-
+                
                 socketio.emit('assistant_response_stream', {
-                    'text': cleaned_chunk_text,
+                    'text': chunk_text,
                     'is_final': False
                 })
                 socketio.sleep(0.05)  # Petit délai pour fluidifier l'affichage
@@ -135,7 +126,6 @@ def appel_llm(transcription):
             'is_final': True
         })
         return "Une erreur s'est produite."
-
 
 @app.route('/')
 def index():

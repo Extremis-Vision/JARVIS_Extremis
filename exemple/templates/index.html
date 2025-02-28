@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text-to-Speech</title>
+</head>
+<body>
+    <h1>Text-to-Speech</h1>
+    <form method="POST">
+        <textarea name="text" placeholder="Entrez votre texte ici"></textarea><br>
+        <input type="submit" value="Générer">
+    </form>
+
+    {% if text %}
+        <h2>Texte généré :</h2>
+        <p>{{ text }}</p>
+        <h2>Audio :</h2>
+        <audio controls autoplay>
+            <source src="{{ audio_file }}" type="audio/wav">
+            Your browser does not support the audio element.
+        </audio>
+    {% endif %}
+
+    {% if error %}
+        <p style="color:red;">{{ error }}</p>
+    {% endif %}
+</body>
+</html>

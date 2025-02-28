@@ -18,3 +18,6 @@ def météo(city):
     else:
         return None
     
+
+print(météo('montréal'))
+    
