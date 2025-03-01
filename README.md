@@ -1,5 +1,3 @@
----
-
 ## Contexte du Projet 📚
 
 Ce projet est conçu pour l'étude des **Large Language Models (LLMs)** et leur application dans un cadre concret, en lien avec deux unités de valeur (UV) de mon établissement d'étude : **AC20 (Travaux de Recherche)** et **TZ20 (Travaux de Laboratoire)**.
@@ -25,4 +23,3 @@ Ce projet est conçu pour l'étude des **Large Language Models (LLMs)** et leur 
 - [ ] **Phase de développement** : Implémenter les fonctionnalités principales et avancées.
 - [ ] **Objectif de finalisation** : Terminer la majorité du projet d'ici fin mai - début juin.
 
----
