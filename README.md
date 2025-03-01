@@ -1,88 +1,28 @@
-# Jarvis - Intelligent Personal Assistant 🤖✨
-
-Jarvis est un assistant personnel intelligent conçu pour répondre aux besoins variés des utilisateurs. Il combine des systèmes de traitement du langage naturel (NLU), un ensemble de plugins, et un système de gestion d'agents multiples. Ce projet se concentre sur l'interaction avec l'utilisateur, la gestion des ressources (fichiers, base de données), et un moteur de recherche performant basé sur des métriques telles que **perplexité** et **perplexica**.
-
 ---
 
-## Fonctionnalités 🔧🚀
+## Contexte du Projet 📚
 
-### Fonctionnalités principales
-- [ ] **Système de NLU (Natural Language Understanding) 🧠**  
-  - Compréhension des intentions de l'utilisateur.
-  - Maintien du contexte dans les interactions.
-  - Support multilingue.
-  
-- [ ] **Plugins intégrés 🔌**  
-  - Agenda : gestion des événements et rappels.
-  - Ouverture de pages Web.
-  - Lecture de musique à partir de plateformes externes.
-  - Services internes : portfolio, expense tracker, habit tracker, etc.
-  
-- [ ] **Système multi-agent et base de données 📊**  
-  - Architecture scalable et efficace pour gérer plusieurs tâches.
-  - Base de données centralisée pour les informations persistantes.
+Ce projet est conçu pour l'étude des **Large Language Models (LLMs)** et leur application dans un cadre concret, en lien avec deux unités de valeur (UV) de mon établissement d'étude : **AC20 (Travaux de Recherche)** et **TZ20 (Travaux de Laboratoire)**.
 
-- [ ] **Gestion des fichiers et ressources 📁**  
-  - Lecture, écriture et modification des fichiers locaux ou sur le cloud.
-  - Intégration avec des APIs externes.
+### Objectifs du Projet
 
-- [ ] **Système de recherche basé sur perplexité et perplexica 🔍**  
-  - Recherche optimisée en fonction du contexte de l'utilisateur.
+- **Apprentissage des bases du Deep Learning** :
+  - [ ] Comprendre les concepts fondamentaux du deep learning.
+  - [ ] Expliquer les mécanismes sous-jacents.
 
----
+- **Spécialisation dans les LLMs** :
+  - [ ] Maîtriser le traitement du langage naturel (NLP).
+  - [ ] Utiliser des systèmes de compréhension du langage naturel (NLU).
+  - [ ] Explorer les modèles de langage statistiques (SLM) et les modèles de langage de grande taille (LLM).
 
-## Fonctionnalités à venir 🌟
+- **Exercices Pratiques** :
+  - [ ] Intégrer des exercices pratiques pour se familiariser avec l'IA et le deep learning.
+  - [ ] Préparer le terrain pour le développement final du projet.
 
-### Liste des fonctionnalités à développer :
-- [ ] **Contrôle domotique 🏠**  
-- [ ] **Assistant de planification intégré à une interface (avec Nextcloud) 📅**  
-- [x] **Prévision météo 🌦️**  
-- [ ] **Lecture multimédia (vidéos, podcasts, etc.) 📺**  
-- [x] **Actualités et informations 📰**  
-- [ ] **Calculs et conversions simples 🔢**  
-- [ ] **Gestion des contacts, appels et messages 📞**  
-- [x] **Suivi personnel (emplois du temps, motivation, anniversaires) 🕒**  
-- [ ] **Mémoire contextuelle : capacité à retenir des informations pour un meilleur contexte 🔍**  
-- [ ] **Traduction multilingue 🌐**  
-- [ ] **Surveillance de santé (rythme cardiaque, suivi forme) 🩺**  
-- [ ] **Analyse d'images et de vidéos 🖼️📹**  
-- [ ] **Organisation automatique des fichiers et tags 📂**  
-- [ ] **Tri des emails et intégration agenda ✉️**  
-- [ ] **Accès au contenu gratuit des articles de journaux 📰**  
-- [x] **Interface Flask avec base de données pour interactions visuelles 🖥️**  
+### Calendrier
+
+- [ ] **Phase d'apprentissage** : Comprendre et utiliser NLP, NLU, SLM, et LLM.
+- [ ] **Phase de développement** : Implémenter les fonctionnalités principales et avancées.
+- [ ] **Objectif de finalisation** : Terminer la majorité du projet d'ici fin mai - début juin.
 
 ---
-
-## Installation 🛠️
-
-1. **Clonez le dépôt** :
-
-   ```bash
-   git clone https://github.com/Extremis-Vision/JARVIS_Extremis.git
-   cd JARVIS_Extremis
-   ```
-
-2. **Installez les dépendances** :
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Configurez l'environnement** :  
-   - Définissez les variables d'environnement pour la base de données, les clés API des plugins, etc.
-
-4. **Lancez Jarvis** :
-
-   ```bash
-   python jarvis.py
-   ```
-
----
-
-## Licence 📜
-
-Ce projet est sous licence MIT. Consultez le fichier [LICENSE](LICENSE) pour plus de détails.
-
----
-
-**Jarvis** est en constante évolution ! Si vous avez une idée ou souhaitez aider au développement, n'hésitez pas à ouvrir une *issue* ou à soumettre une *pull request*. 😊
