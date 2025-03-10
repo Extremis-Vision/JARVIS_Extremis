@@ -256,5 +256,28 @@
             }
         });
     </script>
+    <!-- Ajouter dans la section des contrôles -->
+<div class="controls">
+    <!-- ... autres contrôles ... -->
+    <button id="toggleTTS" class="btn">Activer/Désactiver la voix</button>
+</div>
+
+<!-- Ajouter dans la section script -->
+<script>
+    let ttsEnabled = false;
+    document.getElementById('toggleTTS').addEventListener('click', function() {
+        ttsEnabled = !ttsEnabled;
+        this.textContent = ttsEnabled ? "Désactiver la voix" : "Activer la voix";
+    });
+
+    socket.on('audio_ready', function(data) {
+        if (ttsEnabled) {
+            const audio = new Audio(data.audio_file);
+            audio.play().catch(function(error) {
+                console.error("Erreur lecture audio:", error);
+            });
+        }
+    });
+</script>
 </body>
 </html>

@@ -10,6 +10,9 @@ from openai import OpenAI
 import fonction_jarvis
 import fonction_jarvis.meteo
 import re
+from flask import Flask, render_template, request, send_from_directory  # Ajoutez send_from_directory
+import uuid
+import subprocess
 
 # Configuration des logs
 logging.basicConfig(
@@ -34,6 +37,50 @@ socketio = SocketIO(
 model = None
 VOSK_MODEL_PATH = None
 recognizers = {}
+
+# Ajouter après les autres variables globales
+AUDIO_FOLDER = os.path.join(os.path.dirname(__file__), 'static', 'audio')
+
+def clear_audio_folder():
+    if os.path.exists(AUDIO_FOLDER):
+        for file_name in os.listdir(AUDIO_FOLDER):
+            if file_name.endswith('.wav'):
+                file_path = os.path.join(AUDIO_FOLDER, file_name)
+                try:
+                    os.remove(file_path)
+                except Exception as e:
+                    logger.error(f"Erreur suppression fichier audio {file_path}: {e}")
+    else:
+        os.makedirs(AUDIO_FOLDER)
+
+def synthesize_with_piper(text, model_path="./piper/models/fr_FR-siwis-medium.onnx"):
+    clear_audio_folder()
+    file_name = f"{uuid.uuid4()}.wav"
+    output_file = os.path.join(AUDIO_FOLDER, file_name)
+    
+    command = [
+        "./piper/piper",
+        "--model", model_path,
+        "--output_file", output_file
+    ]
+
+    try:
+        result = subprocess.run(
+            command,
+            input=text,
+            text=True,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        return file_name
+    except Exception as e:
+        logger.error(f"Erreur Piper: {e}")
+        return None
+
+@app.route("/static/audio/<filename>")
+def download_audio(filename):
+    return send_from_directory(AUDIO_FOLDER, filename)
 
 def find_vosk_model():
     """Recherche automatique du modèle Vosk"""
@@ -111,16 +158,20 @@ def appel_llm(transcription):
                 chunk_text = chunk.choices[0].delta.content
                 response_text += chunk_text
 
-                # Supprimer les balises <think></think>
                 cleaned_chunk_text = remove_think_tags(chunk_text)
-
                 socketio.emit('assistant_response_stream', {
                     'text': cleaned_chunk_text,
                     'is_final': False
                 })
-                socketio.sleep(0.05)  # Petit délai pour fluidifier l'affichage
+                socketio.sleep(0.05)
 
-        # Émettre la fin de la réponse
+        # Générer l'audio après avoir reçu toute la réponse
+        audio_file = synthesize_with_piper(response_text)
+        if audio_file:
+            socketio.emit('audio_ready', {
+                'audio_file': f"/static/audio/{audio_file}"
+            })
+
         socketio.emit('assistant_response_stream', {
             'text': '',
             'is_final': True
@@ -258,7 +309,7 @@ def handle_text_input(data):
         socketio.start_background_task(appel_llm, text)
 
 if __name__ == '__main__':
-    # Charger le modèle une seule fois avant de démarrer le serveur
+    clear_audio_folder()  # Ajouter cette ligne
     model = initialize_vosk_model()
     
     if model:
@@ -269,4 +320,4 @@ if __name__ == '__main__':
             debug=True
         )
     else:
-        logger.error("Impossible de charger le modèle Vosk") 
+        logger.error("Impossible de charger le modèle Vosk")

@@ -1,0 +1,1 @@
+Possible moves or transformations that can be applied to the current state.
