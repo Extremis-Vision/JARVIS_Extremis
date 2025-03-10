@@ -2,6 +2,8 @@
 
 Ce projet est conçu pour l'étude des **Large Language Models (LLMs)** et leur application dans un cadre concret, en lien avec deux unités de valeur (UV) de mon établissement d'étude : **AC20 (Travaux de Recherche)** et **TZ20 (Travaux de Laboratoire)**.
 
+The start : [[Base apprentissage profond I automatique]]
+
 ### Objectifs du Projet
 
 - **Apprentissage des bases du Deep Learning** :
